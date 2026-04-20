@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/FernandaIshida/mini-edge-api/internal/api"
-	"github.com/FernandaIshida/mini-edge-api/internal/limiter"
+	limiter "github.com/FernandaIshida/mini-edge-api/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
