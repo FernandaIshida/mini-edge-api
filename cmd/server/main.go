@@ -1,15 +1,18 @@
 package main
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/FernandaIshida/mini-edge-api/internal/api"
+	"github.com/FernandaIshida/mini-edge-api/internal/limiter"
+
+	"github.com/gin-gonic/gin"
+)
 
 func main() {
 	r := gin.Default()
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status": "ok",
-		})
-	})
+	r.Use(limiter.RateLimiter())
+
+	api.SetupRoutes(r)
 
 	r.Run(":8080")
 }
