@@ -5,23 +5,28 @@ import (
 	"time"
 )
 
+type Cache interface {
+	Set(key string, data []byte, ttl time.Duration)
+	Get(key string) ([]byte, bool)
+}
+
 type CacheItem struct {
 	Data      []byte
 	ExpiresAt time.Time
 }
 
-type Cache struct {
+type memoryCache struct {
 	mu    sync.RWMutex
 	items map[string]CacheItem
 }
 
-func NewCache() *Cache {
-	return &Cache{
+func NewCache() Cache {
+	return &memoryCache{
 		items: make(map[string]CacheItem),
 	}
 }
 
-func (c *Cache) Set(key string, data []byte, ttl time.Duration) {
+func (c *memoryCache) Set(key string, data []byte, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -31,7 +36,7 @@ func (c *Cache) Set(key string, data []byte, ttl time.Duration) {
 	}
 }
 
-func (c *Cache) Get(key string) ([]byte, bool) {
+func (c *memoryCache) Get(key string) ([]byte, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 

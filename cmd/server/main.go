@@ -2,7 +2,8 @@ package main
 
 import (
 	"github.com/FernandaIshida/mini-edge-api/internal/api"
-	limiter "github.com/FernandaIshida/mini-edge-api/internal/middleware"
+	"github.com/FernandaIshida/mini-edge-api/internal/cache"
+	"github.com/FernandaIshida/mini-edge-api/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -10,9 +11,11 @@ import (
 func main() {
 	r := gin.Default()
 
-	r.Use(limiter.RateLimiter())
+	r.Use(middleware.RateLimiter())
 
-	api.SetupRoutes(r)
+	cache := cache.NewCache()
+
+	api.SetupRoutes(r, cache)
 
 	r.Run(":8080")
 }
