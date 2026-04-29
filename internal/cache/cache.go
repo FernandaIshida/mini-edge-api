@@ -6,44 +6,88 @@ import (
 )
 
 type Cache interface {
-	Set(key string, data []byte, ttl time.Duration)
-	Get(key string) ([]byte, bool)
+	Set(key string, data []byte, status int, ttl time.Duration)
+	Get(key string) ([]byte, int, bool)
 }
 
 type CacheItem struct {
-	Data      []byte
-	ExpiresAt time.Time
+	Data       []byte
+	StatusCode int
+	ExpiresAt  time.Time
 }
 
 type memoryCache struct {
-	mu    sync.RWMutex
-	items map[string]CacheItem
+	mu       sync.RWMutex
+	items    map[string]CacheItem
+	interval time.Duration
+	stop     chan struct{}
 }
 
-func NewCache() Cache {
-	return &memoryCache{
-		items: make(map[string]CacheItem),
+func NewCache(cleanupInterval time.Duration) Cache {
+	c := &memoryCache{
+		items:    make(map[string]CacheItem),
+		interval: cleanupInterval,
+		stop:     make(chan struct{}),
 	}
+
+	if cleanupInterval > 0 {
+		go c.startCleanup()
+	}
+
+	return c
 }
 
-func (c *memoryCache) Set(key string, data []byte, ttl time.Duration) {
+func (c *memoryCache) Set(key string, data []byte, status int, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.items[key] = CacheItem{
-		Data:      data,
-		ExpiresAt: time.Now().Add(ttl),
+		Data:       data,
+		StatusCode: status,
+		ExpiresAt:  time.Now().Add(ttl),
 	}
 }
 
-func (c *memoryCache) Get(key string) ([]byte, bool) {
+func (c *memoryCache) Get(key string) ([]byte, int, bool) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	item, exists := c.items[key]
-	if !exists || time.Now().After(item.ExpiresAt) {
-		return nil, false
+	c.mu.RUnlock()
+
+	if !exists {
+		return nil, 0, false
 	}
 
-	return item.Data, true
+	now := time.Now()
+	//Lazy eviction: remove expired items on access
+	if now.After(item.ExpiresAt) {
+		c.mu.Lock()
+		delete(c.items, key)
+		c.mu.Unlock()
+		return nil, 0, false
+	}
+
+	return item.Data, item.StatusCode, true
+}
+
+func (c *memoryCache) startCleanup() {
+	ticker := time.NewTicker(c.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+
+			c.mu.Lock()
+			for key, item := range c.items {
+				if now.After(item.ExpiresAt) {
+					delete(c.items, key)
+				}
+			}
+			c.mu.Unlock()
+
+		case <-c.stop:
+			return
+		}
+	}
 }

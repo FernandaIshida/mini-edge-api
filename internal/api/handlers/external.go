@@ -10,20 +10,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ExternalHandler(cache cache.Cache) gin.HandlerFunc {
+func ExternalHandler(cache cache.Cache, client *http.Client) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		reqCtx := ctx.Request.Context()
-		key := "external:posts"
+		key := "external:" + ctx.Request.URL.String()
 
-		ctx.Header("Cache-Control", "public, max-age=30")
-
-		if data, found := cache.Get(key); found {
-			log.Println("CACHE HIT")
+		if data, status, found := cache.Get(key); found {
+			log.Printf("CACHE HIT: %s", key)
 			ctx.Header("X-Cache", "HIT")
-			ctx.Data(http.StatusOK, "application/json", data)
+			ctx.Data(status, "application/json", data)
 			return
 		}
 
+		log.Printf("CACHE MISS: %s", key)
 		ctx.Header("X-Cache", "MISS")
 
 		url := "https://jsonplaceholder.typicode.com/posts"
@@ -31,29 +30,37 @@ func ExternalHandler(cache cache.Cache) gin.HandlerFunc {
 		// Create a new request with the context
 		req, err := http.NewRequestWithContext(reqCtx, "GET", url, nil)
 		if err != nil {
-			ctx.JSON(500, gin.H{"error": "failed to create request"})
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create request"})
 			return
 		}
 
-		// Use the default HTTP client to make the request
-		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
-			ctx.JSON(500, gin.H{"error": "external request failed"})
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "external request failed"})
 			return
 		}
+
 		defer resp.Body.Close()
 
 		// Read the response body
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			ctx.JSON(500, gin.H{"error": "failed to read response"})
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read response"})
 			return
 		}
 
-		cache.Set(key, body, 30*time.Second)
+		if resp.StatusCode == http.StatusOK {
+			ctx.Header("Cache-Control", "public, max-age=30")
+			cache.Set(key, body, resp.StatusCode, 30*time.Second)
+		} else {
+			ctx.Header("Cache-Control", "no-store")
+		}
 
 		// Return the external API response directly to the client
-		ctx.Data(http.StatusOK, "application/json", body)
+		contentType := resp.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "application/json"
+		}
+		ctx.Data(resp.StatusCode, contentType, body)
 	}
 }
