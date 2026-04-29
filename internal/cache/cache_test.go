@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -10,12 +11,16 @@ import (
 func TestCache_SetAndGet(t *testing.T) {
 	cache := NewCache(0)
 
-	cache.Set("key", []byte("value"), time.Second)
+	cache.Set("key", []byte("value"), http.StatusOK, time.Second)
 
-	data, ok := cache.Get("key")
+	data, status, ok := cache.Get("key")
 
 	if !ok {
 		t.Fatal("Expected key to exist")
+	}
+
+	if status != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", status)
 	}
 
 	if string(data) != "value" {
@@ -26,11 +31,11 @@ func TestCache_SetAndGet(t *testing.T) {
 func TestCache_Expiration(t *testing.T) {
 	cache := NewCache(0)
 
-	cache.Set("key", []byte("value"), 50*time.Millisecond)
+	cache.Set("key", []byte("value"), http.StatusOK, 50*time.Millisecond)
 
 	time.Sleep(100 * time.Millisecond)
 
-	_, ok := cache.Get("key")
+	_, _, ok := cache.Get("key")
 
 	if ok {
 		t.Fatal("Expected key to be expired")
@@ -40,11 +45,11 @@ func TestCache_Expiration(t *testing.T) {
 func TestCache_Cleanup(t *testing.T) {
 	cache := NewCache(50 * time.Millisecond)
 
-	cache.Set("key|", []byte("value"), 300*time.Millisecond)
+	cache.Set("key|", []byte("value"), http.StatusOK, 300*time.Millisecond)
 
 	time.Sleep(200 * time.Millisecond)
 
-	_, ok := cache.Get("key")
+	_, _, ok := cache.Get("key")
 
 	if ok {
 		t.Fatal("Expected key to be removed by cleanup")
@@ -63,7 +68,13 @@ func TestCache_ConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 
 			key := fmt.Sprintf("key-%d", i)
-			cache.Set(key, []byte(fmt.Sprintf("value%d", i)), time.Second)
+
+			cache.Set(
+				key,
+				[]byte(fmt.Sprintf("value%d", i)), http.StatusOK,
+				time.Second,
+			)
+
 			cache.Get(key)
 		}(i)
 	}
