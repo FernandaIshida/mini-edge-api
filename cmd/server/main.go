@@ -17,12 +17,13 @@ func main() {
 	r.Use(middleware.RateLimiter())
 
 	cacheService := cache.NewCache(1 * time.Second)
+	redisCache := cache.NewRedisCache("localhost:6379")
 
 	httpClient := &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	api.SetupRoutes(r, cacheService, httpClient)
+	api.SetupRoutes(r, cacheService, redisCache, httpClient)
 
 	r.Run(":8080")
 }

@@ -11,9 +11,9 @@ type Cache interface {
 }
 
 type CacheItem struct {
-	Data       []byte
-	StatusCode int
-	ExpiresAt  time.Time
+	Data       []byte    `json:"data"`
+	StatusCode int       `json:"status_code"`
+	ExpiresAt  time.Time `json:"expires_at"`
 }
 
 type memoryCache struct {

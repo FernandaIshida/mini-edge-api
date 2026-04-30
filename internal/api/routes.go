@@ -8,8 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine, cache cache.Cache, httpClient *http.Client) {
-	r.GET("health", handlers.HealthHandler)
+func SetupRoutes(r *gin.Engine, cache cache.Cache, redisCache *cache.RedisCache, httpClient *http.Client) {
+	r.GET("/health", handlers.HealthHandler)
 	r.GET("/products", handlers.ProductsHandler(cache))
-	r.GET("/external-data", handlers.ExternalHandler(cache, httpClient))
+	r.GET("/external-data", handlers.ExternalHandler(cache, redisCache, httpClient))
 }

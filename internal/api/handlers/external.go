@@ -10,14 +10,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ExternalHandler(cache cache.Cache, client *http.Client) gin.HandlerFunc {
+func ExternalHandler(cache cache.Cache, redisCache *cache.RedisCache, client *http.Client) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		reqCtx := ctx.Request.Context()
 		key := "external:" + ctx.Request.URL.String()
 
+		//L1 (memory) cache check
 		if data, status, found := cache.Get(key); found {
 			log.Printf("CACHE HIT: %s", key)
 			ctx.Header("X-Cache", "HIT")
+			ctx.Data(status, "application/json", data)
+			return
+		}
+		//L2 redis
+		if data, status, found := redisCache.Get(key); found {
+			log.Printf("CACHE HIT (Redis): %s", key)
+
+			redisCache.Set(key, data, status, 30*time.Second)
+			ctx.Header("X-Cache", "HIT-REDIS")
 			ctx.Data(status, "application/json", data)
 			return
 		}
@@ -51,7 +61,9 @@ func ExternalHandler(cache cache.Cache, client *http.Client) gin.HandlerFunc {
 
 		if resp.StatusCode == http.StatusOK {
 			ctx.Header("Cache-Control", "public, max-age=30")
+
 			cache.Set(key, body, resp.StatusCode, 30*time.Second)
+			redisCache.Set(key, body, resp.StatusCode, 30*time.Second)
 		} else {
 			ctx.Header("Cache-Control", "no-store")
 		}
