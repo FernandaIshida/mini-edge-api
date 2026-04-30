@@ -22,6 +22,7 @@ This project simulates an intermediate layer (API Gateway / Edge Server) respons
 - Go (Golang)
 - Gin Web Framework
 - net/http
+- Redis
 - sync.RWMutex (concurrency control)
 - Go testing & benchmarking tools
 
