@@ -191,11 +191,11 @@ go test ./internal/cache -bench=. -benchmem
 
 This project was built for learning and demonstrating:
 
-Backend architecture design
-Caching strategies (edge-like behavior)
-Concurrency in Go
-Dependency injection patterns
-Performance analysis with benchmarks
+- Backend architecture design
+- Multi-layer caching strategies simulating edge/gateway behavior
+- Concurrency management in Go
+- Dependency injection and modular design
+- Performance analysis with benchmarks
 
 ---
 
