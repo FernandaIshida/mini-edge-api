@@ -1,144 +1,192 @@
 # Mini Edge API Platform
 
-API desenvolvida em Go com foco em otimização de requisições, uso de cache e integração com serviços externos.
+A lightweight API built in Go that simulates an edge/gateway layer with in-memory caching, external API integration, and performance optimization.
 
-O projeto simula o comportamento de uma camada intermediária (gateway/proxy), responsável por reduzir latência e melhorar a eficiência no acesso a dados.
+The project focuses on reducing latency, improving request efficiency, and simulating real-world API gateway behavior.
 
 ---
 
-## Tecnologias
+## Overview
+
+This project simulates an intermediate layer (API Gateway / Edge Server) responsible for:
+
+- Reducing external API calls
+- Improving response time via caching
+- Handling internal and external data sources
+- Demonstrating concurrency-safe in-memory cache design
+
+---
+
+## Technologies
 
 - Go (Golang)
-- Gin
+- Gin Web Framework
 - net/http
+- sync.RWMutex (concurrency control)
+- Go testing & benchmarking tools
 
 ---
 
-## Funcionalidades
+## ⚙️ Architecture
 
-### Health Check
+Request flow:
 
-GET /health
+Client
+↓
 
-Verifica se a aplicação está em funcionamento.
+API Handler
+↓
 
----
+Cache Layer
+↓ (MISS)
 
-### Data Endpoint
+External API / Mock Data
+↓
 
-GET /data?type=products
+Cache Store
+↓
 
-- Retorna dados simulados
-- Suporte a query parameters
-- Cache em memória com TTL
-
----
-
-### External API Proxy
-
-GET /external-data
-
-- Consome uma API externa (JSONPlaceholder)
-- Atua como proxy
-- Implementa cache para reduzir chamadas externas
-- Retorna os dados diretamente ao cliente
+Client Response
 
 ---
 
-## Cache
+## Endpoints
 
-O projeto utiliza um cache em memória com expiração (TTL).
+### GET /health
+Health check endpoint to verify service availability.
 
-Características:
+### GET /products
+Returns a list of products (mock data).
 
-- Armazenamento por chave
-- Expiração automática
-- Redução de chamadas externas
+Features:
+- In-memory cache
+- TTL-based expiration
+- Reduces processing time on repeated requests
 
-Exemplos de chave:
+### GET /external-data
+Fetches data from an external API (JSONPlaceholder) acting as a proxy.
 
-external:posts  
-data:type=products
+Features:
+- HTTP client injection (Dependency Injection)
+- Caching layer to reduce external calls
+- Returns response directly to the client
+
+---
+## Cache System
+
+The project uses a custom in-memory cache with TTL support.
+
+### Features:
+
+- Thread-safe (`sync.RWMutex`)
+- Key-value storage
+- TTL expiration per entry
+- Lazy eviction on access
+- Background cleanup goroutine (optional)
+
+### Cache behavior:
+
+- `HIT` → returns cached response
+- `MISS` → fetches data and stores it in cache
 
 ---
 
-## Headers HTTP
+## HTTP Headers
 
 ### X-Cache
 
-Indica a origem da resposta:
+Indicates response origin:
 
-X-Cache: MISS → chamada externa  
-X-Cache: HIT → resposta do cache  
-
----
+- `X-Cache: HIT` → served from cache
+- `X-Cache: MISS` → fetched from source
 
 ### Cache-Control
 
+```http
 Cache-Control: public, max-age=30
-
-Permite que clientes armazenem a resposta por um período definido.
-
----
-
-## Fluxo do endpoint /external-data
-
-Client  
-↓  
-API (cache)  
-↓  
-API externa (em caso de MISS)  
-↓  
-Cache  
-↓  
-Client  
+```
+Allows client-side caching for 30 seconds.
 
 ---
 
-## Rate Limiting
+## Benchmarks
 
-A aplicação possui middleware para controle de requisições por cliente.
+Cache performance was measured using Go benchmarks:
+
+| Benchmark                  | ns/op (avg) | B/op | allocs/op |
+|--------------------------|------------|------|------------|
+| Cache Get (Hit)          | ~23 ns/op  | 0 B  | 0 allocs   |
+| Cache Get (Miss)         | ~17 ns/op  | 0 B  | 0 allocs   |
+| Cache Set                | ~493 ns/op | 336 B| 3 allocs   |
+
+### Performance Analysis
+
+- **GET operations (Hit/Miss)** are extremely fast due to direct in-memory map access (O(1)), with minimal overhead and zero allocations.
+- **SET operations** are more expensive because they involve memory allocations and map updates, which introduces additional latency and garbage collector pressure.
+- The cache is optimized for **read-heavy workloads**, which is typical in edge/gateway architectures.
+
+Overall, the results demonstrate a system designed for low-latency reads, where write cost is accepted as a trade-off for fast retrieval and simplicity of design.
 
 ---
 
-## Estrutura do projeto
-
-cmd/server  
-internal/api  
-internal/cache  
-internal/middleware  
-internal/routes  
+### Project Structure
+cmd/server
+internal/api
+internal/cache
+internal/handlers
+internal/middleware
+internal/routes
 
 ---
 
-## Como rodar
+### How to run
+```
+go mod tidy
+go run ./cmd/server
+```
 
-go mod tidy  
-go run ./cmd/server  
-
-A aplicação estará disponível em:
-
+Server runs at:
+```
 http://localhost:8080
+```
 
 ---
 
-## Exemplo de uso
+### Testing
 
-PowerShell:
+Run unit tests:
+```
+go test ./internal/cache -v
+```
 
-iwr http://localhost:8080/external-data -UseBasicParsing
+Run benchmarks:
+```
+go test ./internal/cache -bench=. -benchmem
+```
+---
+
+### Future improvements
+- Cache based on query parameters
+- Request timeout and retry strategy
+- Structured logging
+- Redis distributed cache
+- Cache metrics (hit ratio, latency tracking)
+- LRU eviction policy
 
 ---
 
-## Próximos passos
+## Purpose
 
-- Cache baseado em query parameters
-- Timeout e retry em chamadas externas
-- Logs estruturados
-- Cache distribuído (ex: Redis)
+This project was built for learning and demonstrating:
+
+Backend architecture design
+Caching strategies (edge-like behavior)
+Concurrency in Go
+Dependency injection patterns
+Performance analysis with benchmarks
 
 ---
 
-## Autor
+### Author
 
 Fernanda Ishida
