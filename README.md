@@ -1,6 +1,6 @@
 # Mini Edge API Platform
 
-A lightweight API built in Go that simulates an edge/gateway layer with in-memory caching, external API integration, and performance optimization.
+A lightweight Go API that simulates an edge/gateway layer with multi-layer caching (in-memory + external integration) and performance optimization.
 
 The project focuses on reducing latency, improving request efficiency, and simulating real-world API gateway behavior.
 
@@ -11,9 +11,9 @@ The project focuses on reducing latency, improving request efficiency, and simul
 This project simulates an intermediate layer (API Gateway / Edge Server) responsible for:
 
 - Reducing external API calls
-- Improving response time via caching
+- Improving response time via multi-layer caching (in-memory + external integration)
 - Handling internal and external data sources
-- Demonstrating concurrency-safe in-memory cache design
+- Demonstrating concurrency-safe caching strategies in Go
 
 ---
 
@@ -27,7 +27,7 @@ This project simulates an intermediate layer (API Gateway / Edge Server) respons
 
 ---
 
-## ⚙️ Architecture
+## Architecture
 
 Request flow:
 
@@ -37,16 +37,16 @@ Client
 API Handler
 ↓
 
-Cache Layer
+Cache Layer (L1 - Memory)
+↓ (MISS)
+
+Cache Layer (L2 - Redis)
 ↓ (MISS)
 
 External API / Mock Data
 ↓
 
-Cache Store
-↓
-
-Client Response
+Cache Store (Redis + Memory)
 
 ---
 
@@ -64,17 +64,23 @@ Features:
 - Reduces processing time on repeated requests
 
 ### GET /external-data
-Fetches data from an external API (JSONPlaceholder) acting as a proxy.
+
+Acts as a proxy endpoint that fetches data from an external API (JSONPlaceholder) and applies a multi-layer caching strategy.
 
 Features:
+
+- Multi-layer caching (L1 in-memory + L2 Redis)
+- Cache fallback strategy (L1 → L2 → external API)
 - HTTP client injection (Dependency Injection)
-- Caching layer to reduce external calls
-- Returns response directly to the client
+- Reduced external API calls and improved latency
+- Direct response streaming to the client
+- Cache observability via `X-Cache` header (HIT / MISS / HIT-REDIS)
 
 ---
+
 ## Cache System
 
-The project uses a custom in-memory cache with TTL support.
+The project uses a multi-layer caching strategy (in-memory + Redis optional persistence).
 
 ### Features:
 
@@ -83,11 +89,12 @@ The project uses a custom in-memory cache with TTL support.
 - TTL expiration per entry
 - Lazy eviction on access
 - Background cleanup goroutine (optional)
+- Redis integration for distributed caching (L2 layer)
 
 ### Cache behavior:
 
-- `HIT` → returns cached response
-- `MISS` → fetches data and stores it in cache
+- HIT (L1 or L2) → returns cached response
+- MISS → fetches data, stores in L2 (Redis) and L1 (memory)
 
 ---
 
@@ -99,6 +106,7 @@ Indicates response origin:
 
 - `X-Cache: HIT` → served from cache
 - `X-Cache: MISS` → fetched from source
+- `X-Cache: HIT-REDIS → served from Redis cache (L2)
 
 ### Cache-Control
 
@@ -124,6 +132,7 @@ Cache performance was measured using Go benchmarks:
 - **GET operations (Hit/Miss)** are extremely fast due to direct in-memory map access (O(1)), with minimal overhead and zero allocations.
 - **SET operations** are more expensive because they involve memory allocations and map updates, which introduces additional latency and garbage collector pressure.
 - The cache is optimized for **read-heavy workloads**, which is typical in edge/gateway architectures.
+- Redis is used as a secondary cache layer to persist data across application restarts.
 
 Overall, the results demonstrate a system designed for low-latency reads, where write cost is accepted as a trade-off for fast retrieval and simplicity of design.
 
@@ -132,7 +141,8 @@ Overall, the results demonstrate a system designed for low-latency reads, where 
 ### Project Structure
 cmd/server
 internal/api
-internal/cache
+internal/cache (in-memory cache)
+internal/cache/redis (Redis implementation)
 internal/handlers
 internal/middleware
 internal/routes
@@ -169,7 +179,8 @@ go test ./internal/cache -bench=. -benchmem
 - Cache based on query parameters
 - Request timeout and retry strategy
 - Structured logging
-- Redis distributed cache
+- Redis cluster / high availability setup
+- Cache invalidation strategies
 - Cache metrics (hit ratio, latency tracking)
 - LRU eviction policy
 
