@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/FernandaIshida/mini-edge-api/internal/metrics"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -26,28 +27,49 @@ func NewRedisCache(addr string) *RedisCache {
 }
 
 func (r *RedisCache) Get(key string) ([]byte, int, bool) {
+	start := time.Now()
+
 	val, err := r.client.Get(r.ctx, key).Bytes()
 	if err != nil {
 		if err == redis.Nil {
+			metrics.RedisMiss.Inc()
+
+			metrics.RedisDuration.WithLabelValues("miss").Observe(time.Since(start).Seconds())
+
 			// key does not exist
 			return nil, 0, false
 		}
 
 		log.Println("[REDIS ERROR - GET]:", err)
+
+		metrics.RedisMiss.Inc()
+
+		metrics.RedisDuration.WithLabelValues("miss").Observe(time.Since(start).Seconds())
+
 		return nil, 0, false
 	}
 
 	var item CacheItem
 	if err := json.Unmarshal(val, &item); err != nil {
 		log.Println("[REDIS ERROR - UNMARSHAL]:", err)
+
+		metrics.RedisMiss.Inc()
+
+		metrics.RedisDuration.WithLabelValues("miss").Observe(time.Since(start).Seconds())
+
 		return nil, 0, false
 	}
 
 	log.Println("[REDIS HIT]:", key)
+
+	metrics.RedisDuration.WithLabelValues("hit").Observe(time.Since(start).Seconds())
+
 	return item.Data, item.StatusCode, true
 }
 
 func (r *RedisCache) Set(key string, value []byte, status int, ttl time.Duration) {
+	start := time.Now()
+
 	item := CacheItem{
 		Data:       value,
 		StatusCode: status,
@@ -65,6 +87,10 @@ func (r *RedisCache) Set(key string, value []byte, status int, ttl time.Duration
 		log.Println("[REDIS ERROR - SET]:", err)
 		return
 	}
+
+	metrics.RedisWrites.Inc()
+
+	metrics.RedisDuration.WithLabelValues("write").Observe(time.Since(start).Seconds())
 
 	log.Println("[REDIS SET]:", key)
 }

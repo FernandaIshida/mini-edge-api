@@ -3,6 +3,8 @@ package cache
 import (
 	"sync"
 	"time"
+
+	"github.com/FernandaIshida/mini-edge-api/internal/metrics"
 )
 
 type Cache interface {
@@ -46,14 +48,20 @@ func (c *memoryCache) Set(key string, data []byte, status int, ttl time.Duration
 		StatusCode: status,
 		ExpiresAt:  time.Now().Add(ttl),
 	}
+
+	metrics.CacheWrites.Inc()
+
 }
 
 func (c *memoryCache) Get(key string) ([]byte, int, bool) {
+	start := time.Now()
+
 	c.mu.RLock()
 	item, exists := c.items[key]
 	c.mu.RUnlock()
 
 	if !exists {
+		metrics.CacheMiss.Inc()
 		return nil, 0, false
 	}
 
@@ -63,8 +71,17 @@ func (c *memoryCache) Get(key string) ([]byte, int, bool) {
 		c.mu.Lock()
 		delete(c.items, key)
 		c.mu.Unlock()
+
+		metrics.CacheMiss.Inc()
+
+		metrics.CacheDuration.WithLabelValues("miss").Observe(time.Since(start).Seconds())
+
 		return nil, 0, false
 	}
+
+	metrics.CacheHits.Inc()
+
+	metrics.CacheDuration.WithLabelValues("hit").Observe(time.Since(start).Seconds())
 
 	return item.Data, item.StatusCode, true
 }
