@@ -26,7 +26,9 @@ func ExternalHandler(cache cache.Cache, redisCache *cache.RedisCache, client *ht
 		if data, status, found := redisCache.Get(key); found {
 			log.Printf("CACHE HIT (Redis): %s", key)
 
-			redisCache.Set(key, data, status, 30*time.Second)
+			//Warm up L1 cache after Redis hit
+			cache.Set(key, data, status, 30*time.Second)
+
 			ctx.Header("X-Cache", "HIT-REDIS")
 			ctx.Data(status, "application/json", data)
 			return
