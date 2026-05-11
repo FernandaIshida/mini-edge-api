@@ -30,24 +30,22 @@ This project simulates an intermediate layer (API Gateway / Edge Server) respons
 
 ## Architecture
 
-Request flow:
+```mermaid
+  flowchart TD
+    A[Client] --> B[API - Go / Gin]
 
-Client
-↓
+    B --> C[L1 Cache - In Memory]
+    C -->|MISS| D[L2 Cache - Redis]
+    D -->|MISS| E[External API - JSONPlaceholder]
 
-API Handler
-↓
+    B --> F[/metrics endpoint/]
+    F --> G[Prometheus]
+    G --> H[Grafana]
 
-Cache Layer (L1 - Memory)
-↓ (MISS)
+    D -. persistence .-> D
+```
 
-Cache Layer (L2 - Redis)
-↓ (MISS)
-
-External API / Mock Data
-↓
-
-Cache Store (Redis + Memory)
+Redis acts as a distributed cache layer to persist data across application restarts and multiple instances.
 
 ---
 
@@ -77,6 +75,23 @@ Features:
 - Direct response streaming to the client
 - Cache observability via `X-Cache` header (HIT / MISS / HIT-REDIS)
 
+---
+
+## Observability
+
+This project includes a full observability stack using Prometheus and Grafana.
+
+### Metrics exposed:
+
+- HTTP request duration and count
+- Cache hit/miss ratio
+- Redis operations (hits, misses, writes)
+- External API latency
+
+### Tools:
+
+- Prometheus scrapes `/metrics`
+- Grafana visualizes system performance
 ---
 
 ## Cache System
@@ -150,17 +165,34 @@ internal/routes
 
 ---
 
-### How to run
+## How to run (API only)
 ```
 go mod tidy
 go run ./cmd/server
 ```
-
 Server runs at:
 ```
 http://localhost:8080
 ```
+## How to run (full observability stack)
+```
+docker-compose up -d
+```
+Then run the API:
+```
+go mod tidy
+go run ./cmd/server
+```
+## Local Services
 
+### API
+http://localhost:8080
+
+### Observability
+
+- Metrics (Prometheus format): http://localhost:8080/metrics
+- Prometheus UI: http://localhost:9090
+- Grafana Dashboards: http://localhost:3000
 ---
 
 ### Testing
@@ -179,11 +211,11 @@ go test ./internal/cache -bench=. -benchmem
 ### Future improvements
 - Cache based on query parameters
 - Request timeout and retry strategy
-- Structured logging
+- Structured logging (structured JSON logs)
 - Redis cluster / high availability setup
 - Cache invalidation strategies
-- Cache metrics (hit ratio, latency tracking)
-- LRU eviction policy
+- Grafana dashboards for cache hit ratio and latency visualization
+- LRU eviction policy for in-memory cache optimization
 
 ---
 
