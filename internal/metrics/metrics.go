@@ -50,7 +50,7 @@ var (
 
 	ExternalAPIDuration = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Name: "external_apo_duration_seconds",
+			Name: "external_api_duration_seconds",
 			Help: "External API latency",
 		},
 	)
