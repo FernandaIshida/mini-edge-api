@@ -1,29 +1,40 @@
 # Mini Edge API Platform
 
-A lightweight Go API that simulates an edge/gateway layer with multi-layer caching (in-memory + external integration) and performance optimization.
+The Mini Edge Integration Platform is a backend system designed to orchestrate external service integrations through a modular and observable architecture.
 
-The project focuses on reducing latency, improving request efficiency, and simulating real-world API gateway behavior.
+It implements multi-layer caching, request tracing, and metrics instrumentation to optimize request handling and improve system visibility under load.
+
+The system is built with concurrency-safe components and follows a service-oriented structure inspired by real-world API gateway patterns.
 
 ---
 
-## Overview
+## Purpose
 
-This project simulates an intermediate layer (API Gateway / Edge Server) responsible for:
+The system is designed to:
 
-- Reducing external API calls
-- Improving response time via multi-layer caching (in-memory + external integration)
-- Handling internal and external data sources
-- Demonstrating concurrency-safe caching strategies in Go
+- Orchestrate external API integrations through a unified interface
+- Reduce external dependency latency using multi-layer caching (L1 + Redis)
+- Provide observability through metrics and structured tracing
+- Demonstrate scalable backend architecture patterns in Go
 
 ---
 
 ## Technologies
 
+**Core**:
 - Go (Golang)
 - Gin Web Framework
-- net/http
-- Redis
-- sync.RWMutex (concurrency control)
+
+**Data & Performance:**
+- Redis — distributed caching (L2)
+- sync.RWMutex — concurrency-safe in-memory cache
+- net/http — external API communication
+
+**Observability:**
+- Prometheus — metrics collection (latency, cache, integrations)
+- Grafana — dashboards for performance and system observability
+
+**Engineering validation:**
 - Go testing & benchmarking tools
 
 ---
@@ -32,110 +43,176 @@ This project simulates an intermediate layer (API Gateway / Edge Server) respons
 
 ```mermaid
   flowchart TD
-    A[Client] --> B[API - Go / Gin]
+    A[Client] --> B[Gin Router]
 
-    B --> C[L1 Cache - In Memory]
-    C -->|MISS| D[L2 Cache - Redis]
-    D -->|MISS| E[External API - JSONPlaceholder]
+    B --> C[Middleware Layer]
+    C --> D[Request ID]
+    C --> E[Rate Limiting]
+    C --> F[Metrics Instrumentation]
 
-    B --> F[/metrics endpoint/]
-    F --> G[Prometheus]
-    G --> H[Grafana]
+    B --> G[Integration Handler]
+    G --> H[Integration Service]
 
-    D -. persistence .-> D
+    H --> I[Integration Registry]
+
+    H --> J[L1 Cache - Memory]
+    J -->|MISS| K[L2 Cache - Redis]
+    K -->|MISS| L[External APIs]
+
+    F --> M[Prometheus]
+    M --> N[Grafana]
 ```
 
-Redis acts as a distributed cache layer to persist data across application restarts and multiple instances.
+The platform follows a layered architecture where requests pass through middleware responsible for tracing, rate limiting, and metrics instrumentation before reaching the integration orchestration layer.
+
+The Integration Service centralizes external communication, caching behavior, and integration routing through a registry-based approach.
+
+Caching is implemented using a multi-layer strategy:
+- L1: low-latency in-memory cache
+- L2: Redis distributed cache
+
+Observability is integrated through Prometheus metrics and Grafana dashboards, enabling visibility into request latency, cache efficiency, and external API performance.
 
 ---
 
 ## Endpoints
 
 ### GET /health
-Health check endpoint to verify service availability.
+Health check endpoint used to verify service availability and API responsiveness.
 
-### GET /products
-Returns a list of products (mock data).
+Example:
 
-Features:
-- In-memory cache
-- TTL-based expiration
-- Reduces processing time on repeated requests
+`GET http://localhost:8080/health`
 
-### GET /external-data
+Response:
 
-Acts as a proxy endpoint that fetches data from an external API (JSONPlaceholder) and applies a multi-layer caching strategy.
-
-Features:
-
-- Multi-layer caching (L1 in-memory + L2 Redis)
-- Cache fallback strategy (L1 → L2 → external API)
-- HTTP client injection (Dependency Injection)
-- Reduced external API calls and improved latency
-- Direct response streaming to the client
-- Cache observability via `X-Cache` header (HIT / MISS / HIT-REDIS)
+```
+{
+  "status": "ok"
+}
+```
 
 ---
 
+### GET /integrations/:name
+
+Executes a registered external integration through the integration service layer.
+
+The request passes through:
+
+- middleware instrumentation
+- request tracing
+- rate limiting
+- multi-layer caching (L1 + Redis)
+- integration orchestration
+
+Supported integrations are managed through a registry-based architecture.
+
+Example:
+
+`curl http://localhost:8080/integrations/github`
+
+#### Response headers:
+
+X-Cache: HIT
+X-Request-ID: 8c3d1e7f...
+
+#### Cache behavior:
+
+- `HIT` → served from in-memory cache
+- `HIT-REDIS` → served from Redis cache
+- `MISS` → fetched from external API
+
+#### Example integrations currently available:
+
+- github
+- pokemon
+- weather
+- exchange
+---
+
+### GET /metrics
+
+Prometheus-compatible metrics endpoint used for observability and monitoring.
+
+#### Metrics include:
+
+- HTTP request latency
+- Request throughput
+- Cache hit/miss ratio
+- Redis operations
+- External API duration metrics
+
+Example:
+
+`GET http://localhost:8080/metrics`
+
+---
 ## Observability
 
-This project includes a full observability stack using Prometheus and Grafana.
+The platform exposes Prometheus-compatible metrics through the `/metrics` endpoint, enabling visibility into request behavior, cache efficiency, and integration performance.
 
-### Metrics exposed:
+### Metrics
 
-- HTTP request duration and count
-- Cache hit/miss ratio
-- Redis operations (hits, misses, writes)
-- External API latency
+- HTTP request count and latency
+- Cache hit/miss ratio (memory + Redis)
+- Redis operation metrics
+- External API duration metrics
+- Integration execution visibility
 
-### Tools:
+### Tracing
 
-- Prometheus scrapes `/metrics`
-- Grafana visualizes system performance
+- Request ID propagation through middleware
+- Correlated logs across handlers and services
+- `X-Request-ID` response header support
+
 ---
 
 ## Cache System
 
-The project uses a multi-layer caching strategy (in-memory + Redis optional persistence).
+The platform implements a multi-layer caching strategy designed to reduce latency and minimize external API dependency during integration execution.
 
-### Features:
+### Features
 
-- Thread-safe (`sync.RWMutex`)
-- Key-value storage
-- TTL expiration per entry
+- Thread-safe in-memory cache using `sync.RWMutex`
+- Redis distributed cache layer (L2)
+- TTL-based expiration
 - Lazy eviction on access
-- Background cleanup goroutine (optional)
-- Redis integration for distributed caching (L2 layer)
+- Background cleanup goroutine
+- Cache warm-up after Redis hits
 
-### Cache behavior:
+### Cache Strategy
 
-- HIT (L1 or L2) → returns cached response
-- MISS → fetches data, stores in L2 (Redis) and L1 (memory)
+- L1 (memory) prioritizes low-latency access
+- L2 (Redis) enables distributed cache sharing across instances
+- Cache misses trigger external API requests and cache population
 
+### Cache Flow
+
+- HIT → served from in-memory cache
+- HIT-REDIS → served from Redis cache and promoted to L1
+- MISS → external API request followed by cache population
 ---
 
 ## HTTP Headers
 
 ### X-Cache
 
-Indicates response origin:
+Indicates where the response was served from:
 
-- `X-Cache: HIT` → served from cache
-- `X-Cache: MISS` → fetched from source
-- `X-Cache: HIT-REDIS → served from Redis cache (L2)
+- `HIT` → in-memory cache (L1)
+- `HIT-REDIS` → Redis cache (L2) 
+- `MISS` → external API request
 
-### Cache-Control
+### X-Request-ID
 
-```http
-Cache-Control: public, max-age=30
-```
-Allows client-side caching for 30 seconds.
+Used for request tracing and log correlation across the request lifecycle.
 
 ---
 
 ## Benchmarks
 
-Cache performance was measured using Go benchmarks:
+Benchmarks were executed to validate cache access performance and evaluate read/write overhead under concurrent access scenarios.
 
 | Benchmark                  | ns/op (avg) | B/op | allocs/op |
 |--------------------------|------------|------|------------|
@@ -145,27 +222,56 @@ Cache performance was measured using Go benchmarks:
 
 ### Performance Analysis
 
-- **GET operations (Hit/Miss)** are extremely fast due to direct in-memory map access (O(1)), with minimal overhead and zero allocations.
-- **SET operations** are more expensive because they involve memory allocations and map updates, which introduces additional latency and garbage collector pressure.
-- The cache is optimized for **read-heavy workloads**, which is typical in edge/gateway architectures.
-- Redis is used as a secondary cache layer to persist data across application restarts.
+- Cache read operations are optimized for low-latency access with zero allocations
+- Write operations involve memory allocation and synchronization overhead
+- The cache design prioritizes read-heavy workloads common in gateway and integration systems
+- Redis operates as a secondary distributed cache layer for resilience and shared cache access
 
-Overall, the results demonstrate a system designed for low-latency reads, where write cost is accepted as a trade-off for fast retrieval and simplicity of design.
-
----
-
-### Project Structure
-cmd/server
-internal/api
-internal/cache (in-memory cache)
-internal/cache/redis (Redis implementation)
-internal/handlers
-internal/middleware
-internal/routes
+The benchmark results demonstrate a system optimized for fast retrieval and reduced external dependency usage.
 
 ---
 
-## How to run (API only)
+## Project Structure
+
+```text
+.
+├── cmd/
+│   └── server/
+│       └── application entrypoint
+│
+├── internal/
+│   ├── api/
+│   │   └── handlers/
+│   │       └── HTTP handlers and request processing
+│   │
+│   ├── cache/
+│   │   └── in-memory and Redis cache layers
+│   │
+│   ├── integrations/
+│   │   └── external integration orchestration
+│   │
+│   ├── metrics/
+│   │   └── Prometheus metrics instrumentation
+│   │
+│   └── middleware/
+│       └── request lifecycle middleware
+│           ├── rate limiting
+│           ├── tracing
+│           └── metrics
+│
+├── docker-compose.yml
+│   └── observability stack services
+│
+├── go.mod
+│
+└── README.md
+```
+
+---
+
+## Running the Project
+
+### API
 ```
 go mod tidy
 go run ./cmd/server
@@ -174,7 +280,7 @@ Server runs at:
 ```
 http://localhost:8080
 ```
-## How to run (full observability stack)
+## Full Observability Stack
 ```
 docker-compose up -d
 ```
@@ -183,6 +289,7 @@ Then run the API:
 go mod tidy
 go run ./cmd/server
 ```
+---
 ## Local Services
 
 ### API
@@ -209,25 +316,32 @@ go test ./internal/cache -bench=. -benchmem
 ---
 
 ### Future improvements
-- Cache based on query parameters
-- Request timeout and retry strategy
-- Structured logging (structured JSON logs)
-- Redis cluster / high availability setup
-- Cache invalidation strategies
-- Grafana dashboards for cache hit ratio and latency visualization
-- LRU eviction policy for in-memory cache optimization
+
+- Circuit breaker strategy for external integrations
+- OpenTelemetry distributed tracing
+- Structured logging with contextual request tracing
+- Integration health monitoring
+- Dynamic integration registration
+- Retry and timeout strategies for external services
+- Advanced cache key strategies for query-aware caching
+- Advanced cache eviction strategies (LRU/LFU)
+- Redis high-availability and clustered deployment support
+- Advanced observability dashboards for integration and cache analytics
+- Per-integration performance analytics
 
 ---
 
-## Purpose
+### Engineering Focus
 
-This project was built for learning and demonstrating:
+This project applies backend engineering practices including:
 
-- Backend architecture design
-- Multi-layer caching strategies simulating edge/gateway behavior
-- Concurrency management in Go
-- Dependency injection and modular design
-- Performance analysis with benchmarks
+Integration orchestration patterns
+Multi-layer caching strategies
+Concurrency-safe system design
+Metrics instrumentation and observability
+Modular service-oriented architecture
+Performance analysis and benchmarking
+API gateway-inspired request flow design
 
 ---
 
