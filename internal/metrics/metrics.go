@@ -48,11 +48,12 @@ var (
 		},
 	)
 
-	ExternalAPIDuration = prometheus.NewHistogram(
+	ExternalAPIDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name: "external_api_duration_seconds",
 			Help: "External API latency",
 		},
+		[]string{"integration"},
 	)
 
 	RedisHits = prometheus.NewCounter(

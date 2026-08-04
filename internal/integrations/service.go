@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/FernandaIshida/mini-edge-api/internal/cache"
+	"github.com/FernandaIshida/mini-edge-api/internal/metrics"
 )
 
 type Service struct {
