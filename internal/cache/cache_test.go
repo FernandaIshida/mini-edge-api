@@ -81,3 +81,20 @@ func TestCache_ConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestCacheClose(t *testing.T) {
+	cache := NewCache(time.Second)
+	cache.Close()
+}
+
+func TestCloseIsIdempotent(t *testing.T) {
+	cache := NewCache(time.Second)
+
+	cache.Close()
+	cache.Close() // Should not panic or cause any issues
+}
+
+func TestCacheWithoutCleanupCanClose(t *testing.T) {
+	cache := NewCache(0)
+	cache.Close()
+}

@@ -9,6 +9,7 @@ import (
 
 func BenchmarkCache_GetHit(b *testing.B) {
 	c := NewCache(0)
+	b.Cleanup(c.Close)
 
 	key := "key"
 	value := []byte("value")
@@ -24,6 +25,7 @@ func BenchmarkCache_GetHit(b *testing.B) {
 
 func BenchmarkCache_GetMiss(b *testing.B) {
 	c := NewCache(0)
+	b.Cleanup(c.Close)
 
 	b.ResetTimer()
 
@@ -34,12 +36,14 @@ func BenchmarkCache_GetMiss(b *testing.B) {
 
 func BenchmarkCache_Set(b *testing.B) {
 	c := NewCache(0)
+	b.Cleanup(c.Close)
+
+	value := []byte("value")
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("key-%d", i)
-		value := []byte("value")
 		c.Set(key, value, http.StatusOK, time.Minute)
 	}
 }

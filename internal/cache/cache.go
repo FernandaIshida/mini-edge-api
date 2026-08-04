@@ -10,6 +10,7 @@ import (
 type Cache interface {
 	Set(key string, data []byte, status int, ttl time.Duration)
 	Get(key string) ([]byte, int, bool)
+	Close()
 }
 
 type CacheItem struct {
@@ -19,10 +20,12 @@ type CacheItem struct {
 }
 
 type memoryCache struct {
-	mu       sync.RWMutex
-	items    map[string]CacheItem
-	interval time.Duration
-	stop     chan struct{}
+	mu        sync.RWMutex
+	items     map[string]CacheItem
+	interval  time.Duration
+	stop      chan struct{}
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func NewCache(cleanupInterval time.Duration) Cache {
@@ -30,13 +33,23 @@ func NewCache(cleanupInterval time.Duration) Cache {
 		items:    make(map[string]CacheItem),
 		interval: cleanupInterval,
 		stop:     make(chan struct{}),
+		done:     make(chan struct{}),
 	}
 
 	if cleanupInterval > 0 {
 		go c.startCleanup()
+	} else {
+		close(c.done)
 	}
 
 	return c
+}
+
+func (c *memoryCache) Close() {
+	c.closeOnce.Do(func() {
+		close(c.stop)
+		<-c.done
+	})
 }
 
 func (c *memoryCache) Set(key string, data []byte, status int, ttl time.Duration) {
@@ -50,7 +63,6 @@ func (c *memoryCache) Set(key string, data []byte, status int, ttl time.Duration
 	}
 
 	metrics.CacheWrites.Inc()
-
 }
 
 func (c *memoryCache) Get(key string) ([]byte, int, bool) {
@@ -88,23 +100,30 @@ func (c *memoryCache) Get(key string) ([]byte, int, bool) {
 
 func (c *memoryCache) startCleanup() {
 	ticker := time.NewTicker(c.interval)
+
 	defer ticker.Stop()
+	defer close(c.done)
 
 	for {
 		select {
 		case <-ticker.C:
-			now := time.Now()
-
-			c.mu.Lock()
-			for key, item := range c.items {
-				if now.After(item.ExpiresAt) {
-					delete(c.items, key)
-				}
-			}
-			c.mu.Unlock()
+			c.removeExpired()
 
 		case <-c.stop:
 			return
+		}
+	}
+}
+
+func (c *memoryCache) removeExpired() {
+	now := time.Now()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for key, item := range c.items {
+		if now.After(item.ExpiresAt) {
+			delete(c.items, key)
 		}
 	}
 }

@@ -19,7 +19,8 @@ func main() {
 
 	redisCache := cache.NewRedisCache("localhost:6379")
 
-	cacheService := cache.NewCache(1 * time.Second)
+	cacheService := cache.NewCache(time.Second)
+	defer cacheService.Close()
 
 	metrics.Init()
 
